@@ -1,0 +1,402 @@
+import { useEffect, useRef, useState } from 'react';
+import { useRound } from '../hooks/useRound';
+import { useGuesses } from '../hooks/useGuesses';
+import { usePlayers } from '../hooks/usePlayers';
+import { supabase, Player, Guess } from '../lib/supabase';
+import {
+  loadGoogleMaps,
+  LONDON_CENTER,
+  LONDON_BOUNDS,
+  calculateDistance,
+  getMarkerColor,
+  randomLondonLocation,
+} from '../lib/googleMaps';
+import { Play, Square, RotateCcw, Wand2, Trophy, Users } from 'lucide-react';
+
+export default function AdminDashboard() {
+  const { round } = useRound();
+  const guesses = useGuesses(round?.round_no ?? null);
+  const players = usePlayers();
+
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [map, setMap] = useState<any>(null);
+  const [markers, setMarkers] = useState<Map<string, any>>(new Map());
+  const [targetMarker, setTargetMarker] = useState<any>(null);
+  const [selectedMode, setSelectedMode] = useState<'normal' | 'elf'>('normal');
+  const [targetLocation, setTargetLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [playerDistances, setPlayerDistances] = useState<Map<string, number>>(new Map());
+  const [actionLoading, setActionLoading] = useState(false);
+
+  useEffect(() => {
+    initMap();
+  }, []);
+
+  useEffect(() => {
+    if (!map || !round || round.status !== 'running') return;
+
+    updateAllMarkers();
+  }, [guesses, round, map, players]);
+
+  const initMap = async () => {
+    if (!mapRef.current) return;
+
+    try {
+      await loadGoogleMaps();
+      const google = (window as any).google;
+
+      const mapInstance = new google.maps.Map(mapRef.current, {
+        center: LONDON_CENTER,
+        zoom: 10,
+        mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || undefined,
+        restriction: {
+          latLngBounds: LONDON_BOUNDS,
+          strictBounds: false,
+        },
+      });
+
+      mapInstance.addListener('click', (e: any) => {
+        setTargetLocation({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+      });
+
+      setMap(mapInstance);
+    } catch (err) {
+      console.error('Error loading Google Maps:', err);
+      alert('Failed to load map. Please check your Google Maps API key.');
+    }
+  };
+
+  const updateAllMarkers = () => {
+    if (!map || !round || !round.target_lat || !round.target_lng) return;
+
+    const google = (window as any).google;
+    const newDistances = new Map<string, number>();
+
+    guesses.forEach((guess, playerId) => {
+      const player = players.get(playerId);
+      if (!player) return;
+
+      const distance = calculateDistance(
+        guess.lat,
+        guess.lng,
+        round.target_lat!,
+        round.target_lng!
+      );
+
+      newDistances.set(playerId, distance);
+
+      if (round.status === 'running' && distance <= 10) {
+        triggerWin(playerId, distance);
+        return;
+      }
+
+      const color = getMarkerColor(distance);
+      updateMarker(playerId, guess, player, color);
+    });
+
+    setPlayerDistances(newDistances);
+
+    if (!targetMarker && round.target_lat && round.target_lng) {
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        map,
+        position: { lat: round.target_lat, lng: round.target_lng },
+        title: 'Target',
+      });
+      setTargetMarker(marker);
+    } else if (targetMarker && round.target_lat && round.target_lng) {
+      targetMarker.position = { lat: round.target_lat, lng: round.target_lng };
+    }
+  };
+
+  const updateMarker = (playerId: string, guess: Guess, player: Player, color: string) => {
+    const google = (window as any).google;
+
+    const markerContent = document.createElement('div');
+    markerContent.style.cssText = `
+      background: ${color};
+      padding: 8px 12px;
+      border-radius: 20px;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      white-space: nowrap;
+      font-size: 14px;
+    `;
+    markerContent.textContent = player.nickname;
+
+    if (markers.has(playerId)) {
+      const marker = markers.get(playerId);
+      marker.position = { lat: guess.lat, lng: guess.lng };
+      marker.content = markerContent;
+    } else {
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        map,
+        position: { lat: guess.lat, lng: guess.lng },
+        content: markerContent,
+      });
+      setMarkers((prev) => {
+        const next = new Map(prev);
+        next.set(playerId, marker);
+        return next;
+      });
+    }
+  };
+
+  const triggerWin = async (winnerId: string, distance: number) => {
+    if (!round || round.status !== 'running') return;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      await supabase.functions.invoke('admin_actions', {
+        body: {
+          action: 'set_winner',
+          winner_player_id: winnerId,
+          winner_distance_m: distance,
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      const guess = guesses.get(winnerId);
+      if (guess && map) {
+        map.panTo({ lat: guess.lat, lng: guess.lng });
+        setTimeout(() => {
+          map.setZoom(18);
+          map.setTilt(60);
+        }, 1000);
+      }
+    } catch (err) {
+      console.error('Error setting winner:', err);
+    }
+  };
+
+  const handleStartRound = async (mode: 'normal' | 'elf') => {
+    const location = targetLocation || randomLondonLocation();
+
+    try {
+      setActionLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert('Not authenticated. Please log in.');
+        return;
+      }
+
+      const { error } = await supabase.functions.invoke('admin_actions', {
+        body: {
+          action: 'start_round',
+          mode,
+          target_lat: location.lat,
+          target_lng: location.lng,
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (error) throw error;
+
+      setTargetLocation(location);
+    } catch (err: any) {
+      console.error('Error starting round:', err);
+      alert(err.message || 'Failed to start round');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleStopRound = async () => {
+    try {
+      setActionLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { error } = await supabase.functions.invoke('admin_actions', {
+        body: { action: 'stop_round' },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Error stopping round:', err);
+      alert(err.message || 'Failed to stop round');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleResetRound = async () => {
+    if (!confirm('Reset the round? This will clear all guesses.')) return;
+
+    try {
+      setActionLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { error } = await supabase.functions.invoke('admin_actions', {
+        body: { action: 'reset_round' },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (error) throw error;
+
+      markers.forEach((marker) => {
+        marker.map = null;
+      });
+      setMarkers(new Map());
+
+      if (targetMarker) {
+        targetMarker.map = null;
+        setTargetMarker(null);
+      }
+
+      setTargetLocation(null);
+    } catch (err: any) {
+      console.error('Error resetting round:', err);
+      alert(err.message || 'Failed to reset round');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const sortedPlayers = Array.from(guesses.entries())
+    .map(([playerId, guess]) => {
+      const player = players.get(playerId);
+      const distance = playerDistances.get(playerId) || 0;
+      return { player, guess, distance };
+    })
+    .filter((item) => item.player)
+    .sort((a, b) => a.distance - b.distance);
+
+  return (
+    <div className="flex h-screen">
+      <div className="w-80 bg-gray-900 text-white p-6 flex flex-col overflow-y-auto">
+        <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
+          <Trophy className="w-6 h-6 text-yellow-500" />
+          Admin Control
+        </h1>
+
+        <div className="space-y-4 mb-6">
+          <div>
+            <p className="text-sm text-gray-400">Round</p>
+            <p className="text-xl font-bold">#{round?.round_no || 0}</p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-400">Status</p>
+            <div className="flex items-center gap-2">
+              {round?.status === 'running' && (
+                <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+              )}
+              <p className="text-lg font-semibold capitalize">{round?.status || 'idle'}</p>
+            </div>
+          </div>
+
+          {round?.mode && round.status === 'running' && (
+            <div>
+              <p className="text-sm text-gray-400">Mode</p>
+              <p className="text-lg font-semibold capitalize">{round.mode}</p>
+            </div>
+          )}
+
+          <div>
+            <p className="text-sm text-gray-400 flex items-center gap-1">
+              <Users className="w-4 h-4" />
+              Players
+            </p>
+            <p className="text-xl font-bold">{guesses.size}</p>
+          </div>
+        </div>
+
+        <div className="space-y-2 mb-6">
+          {round?.status === 'idle' && (
+            <>
+              <button
+                onClick={() => handleStartRound('normal')}
+                disabled={actionLoading}
+                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-700 text-white py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition"
+              >
+                <Play className="w-5 h-5" />
+                Start Normal Mode
+              </button>
+
+              <button
+                onClick={() => handleStartRound('elf')}
+                disabled={actionLoading}
+                className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 text-white py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition"
+              >
+                <Wand2 className="w-5 h-5" />
+                Start Elf Mode
+              </button>
+            </>
+          )}
+
+          {round?.status === 'running' && (
+            <button
+              onClick={handleStopRound}
+              disabled={actionLoading}
+              className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-700 text-white py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition"
+            >
+              <Square className="w-5 h-5" />
+              Stop Round
+            </button>
+          )}
+
+          {round?.status === 'finished' && (
+            <button
+              onClick={handleResetRound}
+              disabled={actionLoading}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition"
+            >
+              <RotateCcw className="w-5 h-5" />
+              Reset Round
+            </button>
+          )}
+        </div>
+
+        {targetLocation && (
+          <div className="mb-6 p-4 bg-gray-800 rounded-lg">
+            <p className="text-sm text-gray-400 mb-1">Target Location</p>
+            <p className="text-xs font-mono">
+              {targetLocation.lat.toFixed(6)}, {targetLocation.lng.toFixed(6)}
+            </p>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto">
+          <h2 className="text-lg font-bold mb-3">Players by Distance</h2>
+          <div className="space-y-2">
+            {sortedPlayers.map(({ player, distance }) => (
+              <div
+                key={player!.id}
+                className="flex items-center justify-between p-2 bg-gray-800 rounded"
+              >
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: getMarkerColor(distance) }}
+                  ></div>
+                  <span className="text-sm font-medium truncate max-w-[140px]">
+                    {player!.nickname}
+                  </span>
+                </div>
+                <span className="text-xs text-gray-400">
+                  {distance >= 1000 ? `${(distance / 1000).toFixed(1)}km` : `${distance.toFixed(0)}m`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 relative">
+        <div ref={mapRef} className="w-full h-full" />
+      </div>
+    </div>
+  );
+}
