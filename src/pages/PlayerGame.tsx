@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDeviceId } from '../hooks/useDeviceId';
 import { usePlayer } from '../hooks/usePlayer';
 import { useRound } from '../hooks/useRound';
 import { supabase } from '../lib/supabase';
-import { loadGoogleMaps, LONDON_CENTER, LONDON_BOUNDS } from '../lib/googleMaps';
+import { loadGoogleMaps, LONDON_CENTER, LONDON_BOUNDS, getMarkerColor, getTemperatureLabel } from '../lib/googleMaps';
 import { Gift } from 'lucide-react';
 
 export default function PlayerGame() {
@@ -14,16 +14,17 @@ export default function PlayerGame() {
   const { round } = useRound();
 
   const mapRef = useRef<HTMLDivElement>(null);
-  const [map, setMap] = useState<any>(null);
+  const [, setMap] = useState<any>(null);
   const [marker, setMarker] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [mapsLoaded, setMapsLoaded] = useState(false);
+  const [lastDistance, setLastDistance] = useState<number | null>(null);
 
   // Use refs to avoid stale closures in map click handler
   const roundRef = useRef(round);
   const playerRef = useRef(player);
   const markerRef = useRef(marker);
+  const mapInstanceRef = useRef<any>(null);
 
   useEffect(() => {
     roundRef.current = round;
@@ -72,8 +73,8 @@ export default function PlayerGame() {
       });
 
       mapInstance.addListener('click', handleMapClick);
+      mapInstanceRef.current = mapInstance;
       setMap(mapInstance);
-      setMapsLoaded(true);
     } catch (err: any) {
       console.error('Error loading Google Maps:', err);
       setToast(err.message || 'Failed to load map');
@@ -121,11 +122,12 @@ export default function PlayerGame() {
 
     if (!currentMarker) {
       const newMarker = new google.maps.marker.AdvancedMarkerElement({
-        map,
+        map: mapInstanceRef.current,
         position: { lat, lng },
         content: markerContent,
         title: 'Your guess',
       });
+      markerRef.current = newMarker;
       setMarker(newMarker);
     } else {
       currentMarker.position = { lat, lng };
@@ -140,19 +142,51 @@ export default function PlayerGame() {
 
     try {
       setSubmitting(true);
-      const { error } = await supabase.functions.invoke('submit_guess', {
+      const { data, error } = await supabase.functions.invoke('submit_guess', {
         body: { deviceId, lat, lng },
       });
 
       if (error) throw error;
 
-      setToast('Guess submitted!');
+      // Update distance and marker color based on server response
+      if (data?.distance_m !== undefined && data.distance_m !== null) {
+        setLastDistance(data.distance_m);
+        updateMarkerWithDistance(data.distance_m);
+        setToast(getTemperatureLabel(data.distance_m));
+      } else {
+        setToast('Guess submitted!');
+      }
     } catch (err: any) {
       console.error('Error submitting guess:', err);
       setToast(err.message || 'Failed to submit guess');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const updateMarkerWithDistance = (distance: number) => {
+    const currentMarker = markerRef.current;
+    if (!currentMarker) return;
+
+    const color = getMarkerColor(distance);
+    const markerContent = document.createElement('div');
+    markerContent.innerHTML = `
+      <div style="
+        background: ${color};
+        padding: 8px 16px;
+        border-radius: 24px;
+        color: white;
+        font-weight: bold;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        border: 3px solid white;
+        font-size: 14px;
+        white-space: nowrap;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+      ">
+        ${playerRef.current?.nickname || 'You'}
+      </div>
+    `;
+    currentMarker.content = markerContent;
   };
 
   if (playerLoading) {
@@ -218,9 +252,21 @@ export default function PlayerGame() {
 
       {round?.status === 'running' && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg px-6 py-3">
-          <p className="text-sm font-medium text-gray-700">
-            {marker ? 'Tap to move your guess' : 'Tap anywhere to place your guess'}
-          </p>
+          {lastDistance !== null ? (
+            <div className="text-center">
+              <p
+                className="text-lg font-bold"
+                style={{ color: getMarkerColor(lastDistance) }}
+              >
+                {getTemperatureLabel(lastDistance)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">Tap to move your guess</p>
+            </div>
+          ) : (
+            <p className="text-sm font-medium text-gray-700">
+              Tap anywhere to place your guess
+            </p>
+          )}
         </div>
       )}
 

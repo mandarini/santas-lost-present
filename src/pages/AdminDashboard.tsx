@@ -1,3 +1,4 @@
+/// <reference types="@types/google.maps" />
 import { useEffect, useRef, useState } from 'react';
 import { useRound } from '../hooks/useRound';
 import { useGuesses } from '../hooks/useGuesses';
@@ -12,7 +13,8 @@ import {
   getMarkerColor,
   randomLondonLocation,
 } from '../lib/googleMaps';
-import { Play, Square, RotateCcw, Wand2, Trophy, Users, LogOut } from 'lucide-react';
+import { Play, Square, RotateCcw, Wand2, Trophy, Users, LogOut, Gift } from 'lucide-react';
+import { createPresentOverlay, removePresentOverlay } from '../components/WebGLPresentOverlay';
 
 export default function AdminDashboard() {
   const { round } = useRound();
@@ -23,11 +25,12 @@ export default function AdminDashboard() {
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<any>(null);
   const [markers, setMarkers] = useState<Map<string, any>>(new Map());
-  const [selectedMode, setSelectedMode] = useState<'normal' | 'elf'>('normal');
   const [targetLocation, setTargetLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [playerDistances, setPlayerDistances] = useState<Map<string, number>>(new Map());
   const [actionLoading, setActionLoading] = useState(false);
   const [showGiftOverlay, setShowGiftOverlay] = useState(false);
+  const [webglOverlay, setWebglOverlay] = useState<google.maps.WebGLOverlayView | null>(null);
+  const [winnerName, setWinnerName] = useState<string | null>(null);
 
   useEffect(() => {
     initMap();
@@ -70,7 +73,6 @@ export default function AdminDashboard() {
   const updateAllMarkers = () => {
     if (!map || !round || !round.target_lat || !round.target_lng) return;
 
-    const google = (window as any).google;
     const newDistances = new Map<string, number>();
 
     guesses.forEach((guess, playerId) => {
@@ -152,13 +154,24 @@ export default function AdminDashboard() {
         },
       });
 
-      const guess = guesses.get(winnerId);
-      if (guess && map) {
-        map.panTo({ lat: guess.lat, lng: guess.lng });
-        setTimeout(() => {
-          map.setZoom(18);
-          map.setTilt(60);
-        }, 1000);
+      // Get winner name for display
+      const winner = players.get(winnerId);
+      if (winner) {
+        setWinnerName(winner.nickname);
+      }
+
+      // Show 3D present animation at the target location
+      if (map && round.target_lat && round.target_lng) {
+        setShowGiftOverlay(true);
+
+        const overlay = createPresentOverlay({
+          map,
+          position: { lat: round.target_lat, lng: round.target_lng },
+          onAnimationComplete: () => {
+            // Animation finished - keep the present visible
+          },
+        });
+        setWebglOverlay(overlay);
       }
     } catch (err) {
       console.error('Error setting winner:', err);
@@ -244,6 +257,13 @@ export default function AdminDashboard() {
       setMarkers(new Map());
       setTargetLocation(null);
       setShowGiftOverlay(false);
+      setWinnerName(null);
+
+      // Clean up WebGL overlay
+      if (webglOverlay) {
+        removePresentOverlay(webglOverlay);
+        setWebglOverlay(null);
+      }
     } catch (err: any) {
       console.error('Error resetting round:', err);
       alert(err.message || 'Failed to reset round');
@@ -371,14 +391,7 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        {targetLocation && (
-          <div className="mb-6 p-4 bg-gray-800 rounded-lg">
-            <p className="text-sm text-gray-400 mb-1">Target Location</p>
-            <p className="text-xs font-mono">
-              {targetLocation.lat.toFixed(6)}, {targetLocation.lng.toFixed(6)}
-            </p>
-          </div>
-        )}
+{/* Target location is hidden to prevent cheating - only shown in finale */}
 
         <div className="flex-1 overflow-y-auto">
           <h2 className="text-lg font-bold mb-3">Players by Distance</h2>
@@ -408,6 +421,22 @@ export default function AdminDashboard() {
 
       <div className="flex-1 relative">
         <div ref={mapRef} className="w-full h-full" />
+
+        {/* Winner celebration overlay */}
+        {showGiftOverlay && winnerName && (
+          <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10">
+            <div className="bg-gradient-to-r from-yellow-400 via-red-500 to-yellow-400 text-white px-8 py-4 rounded-2xl shadow-2xl animate-bounce">
+              <div className="flex items-center gap-4">
+                <Gift className="w-10 h-10" />
+                <div>
+                  <p className="text-sm font-medium opacity-90">Present Found!</p>
+                  <p className="text-2xl font-bold">{winnerName} Wins!</p>
+                </div>
+                <Gift className="w-10 h-10" />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -61,14 +61,34 @@ export function calculateDistance(
 }
 
 export function getMarkerColor(distanceM: number): string {
-  if (distanceM > 5000) return '#3B82F6';
-  if (distanceM > 2000) return '#06B6D4';
-  if (distanceM > 1000) return '#10B981';
-  if (distanceM > 500) return '#84CC16';
-  if (distanceM > 200) return '#F59E0B';
-  if (distanceM > 100) return '#F97316';
-  if (distanceM > 50) return '#EF4444';
-  return '#DC2626';
+  // Smooth gradient from blue (cold/far) to red (hot/close)
+  // Max distance considered is 10km, min is 0m
+  const maxDistance = 10000; // 10km
+  const minDistance = 0;
+
+  // Clamp distance between min and max
+  const clampedDistance = Math.max(minDistance, Math.min(maxDistance, distanceM));
+
+  // Calculate ratio (0 = close/hot, 1 = far/cold)
+  const ratio = clampedDistance / maxDistance;
+
+  // HSL color: 0 = red, 240 = blue
+  // We go from red (0) when close to blue (240) when far
+  const hue = ratio * 240;
+
+  return `hsl(${hue}, 100%, 50%)`;
+}
+
+export function getTemperatureLabel(distanceM: number): string {
+  if (distanceM <= 10) return '🔥 BURNING HOT!';
+  if (distanceM <= 50) return '🔥 Very Hot!';
+  if (distanceM <= 100) return '🌡️ Hot';
+  if (distanceM <= 250) return '🌡️ Warm';
+  if (distanceM <= 500) return '😐 Lukewarm';
+  if (distanceM <= 1000) return '❄️ Cool';
+  if (distanceM <= 2000) return '❄️ Cold';
+  if (distanceM <= 5000) return '🥶 Very Cold';
+  return '🧊 Freezing!';
 }
 
 export function randomLondonLocation() {

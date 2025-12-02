@@ -60,7 +60,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: round } = await supabase
       .from('rounds')
-      .select('status, round_no')
+      .select('status, round_no, target_lat, target_lng')
       .eq('id', 'main-round')
       .single();
 
@@ -118,8 +118,25 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Calculate distance from target using Haversine formula
+    let distance_m: number | null = null;
+    if (round.target_lat !== null && round.target_lng !== null) {
+      const R = 6371e3; // Earth's radius in meters
+      const φ1 = (lat * Math.PI) / 180;
+      const φ2 = (round.target_lat * Math.PI) / 180;
+      const Δφ = ((round.target_lat - lat) * Math.PI) / 180;
+      const Δλ = ((round.target_lng - lng) * Math.PI) / 180;
+
+      const a =
+        Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+        Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+      distance_m = R * c;
+    }
+
     return new Response(
-      JSON.stringify({ ok: true, guess_id: guess.id }),
+      JSON.stringify({ ok: true, guess_id: guess.id, distance_m }),
       {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
