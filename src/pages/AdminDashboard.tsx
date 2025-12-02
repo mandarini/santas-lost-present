@@ -23,11 +23,11 @@ export default function AdminDashboard() {
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<any>(null);
   const [markers, setMarkers] = useState<Map<string, any>>(new Map());
-  const [targetMarker, setTargetMarker] = useState<any>(null);
   const [selectedMode, setSelectedMode] = useState<'normal' | 'elf'>('normal');
   const [targetLocation, setTargetLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [playerDistances, setPlayerDistances] = useState<Map<string, number>>(new Map());
   const [actionLoading, setActionLoading] = useState(false);
+  const [showGiftOverlay, setShowGiftOverlay] = useState(false);
 
   useEffect(() => {
     initMap();
@@ -96,17 +96,8 @@ export default function AdminDashboard() {
     });
 
     setPlayerDistances(newDistances);
-
-    if (!targetMarker && round.target_lat && round.target_lng) {
-      const marker = new google.maps.marker.AdvancedMarkerElement({
-        map,
-        position: { lat: round.target_lat, lng: round.target_lng },
-        title: 'Target',
-      });
-      setTargetMarker(marker);
-    } else if (targetMarker && round.target_lat && round.target_lng) {
-      targetMarker.position = { lat: round.target_lat, lng: round.target_lng };
-    }
+    // NOTE: Target marker intentionally NOT shown to prevent cheating!
+    // The target location is only revealed in the finale animation.
   };
 
   const updateMarker = (playerId: string, guess: Guess, player: Player, color: string) => {
@@ -251,13 +242,8 @@ export default function AdminDashboard() {
         marker.map = null;
       });
       setMarkers(new Map());
-
-      if (targetMarker) {
-        targetMarker.map = null;
-        setTargetMarker(null);
-      }
-
       setTargetLocation(null);
+      setShowGiftOverlay(false);
     } catch (err: any) {
       console.error('Error resetting round:', err);
       alert(err.message || 'Failed to reset round');

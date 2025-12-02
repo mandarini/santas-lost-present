@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDeviceId } from '../hooks/useDeviceId';
 import { usePlayer } from '../hooks/usePlayer';
@@ -19,6 +19,23 @@ export default function PlayerGame() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [mapsLoaded, setMapsLoaded] = useState(false);
+
+  // Use refs to avoid stale closures in map click handler
+  const roundRef = useRef(round);
+  const playerRef = useRef(player);
+  const markerRef = useRef(marker);
+
+  useEffect(() => {
+    roundRef.current = round;
+  }, [round]);
+
+  useEffect(() => {
+    playerRef.current = player;
+  }, [player]);
+
+  useEffect(() => {
+    markerRef.current = marker;
+  }, [marker]);
 
   useEffect(() => {
     if (!player) return;
@@ -64,11 +81,17 @@ export default function PlayerGame() {
   };
 
   const handleMapClick = async (e: any) => {
-    if (!player || !round || round.status !== 'running') {
-      if (round?.status === 'idle') {
+    const currentRound = roundRef.current;
+    const currentPlayer = playerRef.current;
+    const currentMarker = markerRef.current;
+
+    if (!currentPlayer || !currentRound || currentRound.status !== 'running') {
+      if (currentRound?.status === 'idle') {
         setToast('Game not started yet');
-      } else if (round?.status === 'finished') {
+      } else if (currentRound?.status === 'finished') {
         setToast('Game has ended');
+      } else if (!currentRound) {
+        setToast('Loading game...');
       }
       return;
     }
@@ -76,16 +99,37 @@ export default function PlayerGame() {
     const lat = e.latLng.lat();
     const lng = e.latLng.lng();
 
-    if (!marker) {
-      const google = (window as any).google;
+    const google = (window as any).google;
+
+    // Create custom marker content with player's color and name
+    const markerContent = document.createElement('div');
+    markerContent.innerHTML = `
+      <div style="
+        background: ${playerRef.current?.color || '#EF4444'};
+        padding: 8px 16px;
+        border-radius: 24px;
+        color: white;
+        font-weight: bold;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        border: 3px solid white;
+        font-size: 14px;
+        white-space: nowrap;
+      ">
+        📍 ${playerRef.current?.nickname || 'You'}
+      </div>
+    `;
+
+    if (!currentMarker) {
       const newMarker = new google.maps.marker.AdvancedMarkerElement({
         map,
         position: { lat, lng },
+        content: markerContent,
         title: 'Your guess',
       });
       setMarker(newMarker);
     } else {
-      marker.position = { lat, lng };
+      currentMarker.position = { lat, lng };
+      currentMarker.content = markerContent;
     }
 
     await submitGuess(lat, lng);
