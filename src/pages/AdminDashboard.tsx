@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRound } from '../hooks/useRound';
 import { useGuesses } from '../hooks/useGuesses';
 import { usePlayers } from '../hooks/usePlayers';
+import { useAuth } from '../hooks/useAuth';
 import { supabase, Player, Guess } from '../lib/supabase';
 import {
   loadGoogleMaps,
@@ -11,12 +12,13 @@ import {
   getMarkerColor,
   randomLondonLocation,
 } from '../lib/googleMaps';
-import { Play, Square, RotateCcw, Wand2, Trophy, Users } from 'lucide-react';
+import { Play, Square, RotateCcw, Wand2, Trophy, Users, LogOut } from 'lucide-react';
 
 export default function AdminDashboard() {
   const { round } = useRound();
   const guesses = useGuesses(round?.round_no ?? null);
   const players = usePlayers();
+  const { user, signOut } = useAuth();
 
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<any>(null);
@@ -273,13 +275,37 @@ export default function AdminDashboard() {
     .filter((item) => item.player)
     .sort((a, b) => a.distance - b.distance);
 
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (err) {
+      console.error('Error signing out:', err);
+    }
+  };
+
   return (
     <div className="flex h-screen">
       <div className="w-80 bg-gray-900 text-white p-6 flex flex-col overflow-y-auto">
-        <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
-          <Trophy className="w-6 h-6 text-yellow-500" />
-          Admin Control
-        </h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Trophy className="w-6 h-6 text-yellow-500" />
+            Admin
+          </h1>
+          <button
+            onClick={handleSignOut}
+            className="p-2 hover:bg-gray-800 rounded-lg transition"
+            title="Sign out"
+          >
+            <LogOut className="w-5 h-5 text-gray-400 hover:text-white" />
+          </button>
+        </div>
+
+        {user && (
+          <div className="mb-4 p-3 bg-gray-800 rounded-lg">
+            <p className="text-xs text-gray-400">Signed in as</p>
+            <p className="text-sm font-medium truncate">{user.email}</p>
+          </div>
+        )}
 
         <div className="space-y-4 mb-6">
           <div>

@@ -212,6 +212,11 @@ INSERT INTO rounds (id, status, mode, round_no)
 VALUES ('main-round', 'idle', 'normal', 0)
 ON CONFLICT (id) DO NOTHING;
 
+-- Enable Realtime for game tables
+ALTER PUBLICATION supabase_realtime ADD TABLE rounds;
+ALTER PUBLICATION supabase_realtime ADD TABLE players;
+ALTER PUBLICATION supabase_realtime ADD TABLE guesses;
+
 -- Seed nickname words
 -- Position 1: Adjectives
 INSERT INTO nickname_words (word, position) VALUES

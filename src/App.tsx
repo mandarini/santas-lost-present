@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Join from './pages/Join';
 import PlayerGame from './pages/PlayerGame';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminLogin from './pages/AdminLogin';
+import AuthGuard from './components/AuthGuard';
 
 function App() {
   return (
@@ -9,7 +11,15 @@ function App() {
       <Routes>
         <Route path="/" element={<Join />} />
         <Route path="/game" element={<PlayerGame />} />
-        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route
+          path="/admin"
+          element={
+            <AuthGuard>
+              <AdminDashboard />
+            </AuthGuard>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
