@@ -88,7 +88,7 @@ export default function AdminDashboard() {
 
       newDistances.set(playerId, distance);
 
-      if (round.status === 'running' && distance <= 10) {
+      if (round.status === 'running' && distance <= 1000) {
         triggerWin(playerId, distance);
         return;
       }

@@ -62,8 +62,8 @@ export function calculateDistance(
 
 export function getMarkerColor(distanceM: number): string {
   // Smooth gradient from blue (cold/far) to red (hot/close)
-  // Max distance considered is 10km, min is 0m
-  const maxDistance = 10000; // 10km
+  // Max distance considered is 30km, min is 0m
+  const maxDistance = 30000; // 30km
   const minDistance = 0;
 
   // Clamp distance between min and max
@@ -80,14 +80,14 @@ export function getMarkerColor(distanceM: number): string {
 }
 
 export function getTemperatureLabel(distanceM: number): string {
-  if (distanceM <= 10) return '🔥 BURNING HOT!';
-  if (distanceM <= 50) return '🔥 Very Hot!';
-  if (distanceM <= 100) return '🌡️ Hot';
-  if (distanceM <= 250) return '🌡️ Warm';
-  if (distanceM <= 500) return '😐 Lukewarm';
-  if (distanceM <= 1000) return '❄️ Cool';
-  if (distanceM <= 2000) return '❄️ Cold';
-  if (distanceM <= 5000) return '🥶 Very Cold';
+  if (distanceM <= 1000) return '🎁 YOU WIN!';
+  if (distanceM <= 2000) return '🔥 BURNING HOT!';
+  if (distanceM <= 5000) return '🔥 Very Hot!';
+  if (distanceM <= 10000) return '🌡️ Hot';
+  if (distanceM <= 15000) return '🌡️ Warm';
+  if (distanceM <= 20000) return '😐 Lukewarm';
+  if (distanceM <= 25000) return '❄️ Cool';
+  if (distanceM <= 30000) return '🥶 Very Cold';
   return '🧊 Freezing!';
 }
 

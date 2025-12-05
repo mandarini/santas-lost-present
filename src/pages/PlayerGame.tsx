@@ -253,14 +253,20 @@ export default function PlayerGame() {
       {round?.status === 'running' && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg px-6 py-3">
           {lastDistance !== null ? (
-            <div className="text-center">
-              <p
-                className="text-lg font-bold"
-                style={{ color: getMarkerColor(lastDistance) }}
-              >
-                {getTemperatureLabel(lastDistance)}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">Tap to move your guess</p>
+            <div className="flex items-center gap-3">
+              <div
+                className="w-8 h-8 rounded-full border-2 border-white shadow-lg"
+                style={{ backgroundColor: getMarkerColor(lastDistance) }}
+              />
+              <div>
+                <p
+                  className="text-lg font-bold"
+                  style={{ color: getMarkerColor(lastDistance) }}
+                >
+                  {getTemperatureLabel(lastDistance)}
+                </p>
+                <p className="text-xs text-gray-500">Tap to move your guess</p>
+              </div>
             </div>
           ) : (
             <p className="text-sm font-medium text-gray-700">
