@@ -24,6 +24,7 @@ export default function PlayerGame() {
   const roundRef = useRef(round);
   const playerRef = useRef(player);
   const markerRef = useRef(marker);
+  const lastDistanceRef = useRef(lastDistance);
   const mapInstanceRef = useRef<any>(null);
 
   useEffect(() => {
@@ -37,6 +38,10 @@ export default function PlayerGame() {
   useEffect(() => {
     markerRef.current = marker;
   }, [marker]);
+
+  useEffect(() => {
+    lastDistanceRef.current = lastDistance;
+  }, [lastDistance]);
 
   useEffect(() => {
     if (!player) return;
@@ -103,11 +108,15 @@ export default function PlayerGame() {
     const google = (window as any).google;
     console.log(playerRef.current?.color);
 
-    // Create custom marker content with player's color and name
+    // Use last distance color if available, otherwise use player's color
+    const initialColor = lastDistanceRef.current !== null
+      ? getMarkerColor(lastDistanceRef.current)
+      : (playerRef.current?.color || '#EF4444');
+
     const markerContent = document.createElement('div');
     markerContent.style.cssText = `
       display: inline-block;
-      background: ${playerRef.current?.color || '#EF4444'};
+      background: ${initialColor};
       padding: 8px 16px;
       border-radius: 24px;
       color: white;
