@@ -6,7 +6,8 @@ import {
   PerspectiveCamera,
   Scene,
   WebGLRenderer,
-  BoxGeometry,
+  ConeGeometry,
+  SphereGeometry,
   MeshStandardMaterial,
   Mesh,
   Group,
@@ -24,12 +25,20 @@ export function createPresentOverlay(options: PresentOverlayOptions): google.map
   let scene: Scene;
   let renderer: WebGLRenderer;
   let camera: PerspectiveCamera;
-  let presentGroup: Group;
-  let animationStartTime: number | null = null;
+  let pinGroup: Group;
+
+  // Mutable animation options (like Google's working sample)
+  const animationOptions = {
+    tilt: 0,
+    heading: 0,
+    zoom: 18,
+  };
 
   const webglOverlayView = new google.maps.WebGLOverlayView();
+  console.log('[WebGL] Creating overlay view');
 
   webglOverlayView.onAdd = () => {
+    console.log('[WebGL] onAdd called');
     scene = new Scene();
     camera = new PerspectiveCamera();
 
@@ -38,54 +47,39 @@ export function createPresentOverlay(options: PresentOverlayOptions): google.map
     scene.add(ambientLight);
 
     // Directional light for shadows and highlights
-    const directionalLight = new DirectionalLight(0xffffff, 0.5);
+    const directionalLight = new DirectionalLight(0xffffff, 0.25);
     directionalLight.position.set(0.5, -1, 0.5);
     scene.add(directionalLight);
 
-    // Create a 3D present box
-    presentGroup = new Group();
+    // Create a 3D pin marker
+    pinGroup = new Group();
 
-    // Present box body (red)
-    const boxGeometry = new BoxGeometry(25, 25, 25);
-    const boxMaterial = new MeshStandardMaterial({
-      color: 0xdc2626,
-      metalness: 0.3,
-      roughness: 0.7,
+    // Pin material (Google Maps red)
+    const pinMaterial = new MeshStandardMaterial({
+      color: 0xea4335,
+      metalness: 0.1,
+      roughness: 0.6,
     });
-    const box = new Mesh(boxGeometry, boxMaterial);
-    presentGroup.add(box);
 
-    // Horizontal ribbon (gold)
-    const ribbonHGeometry = new BoxGeometry(26, 5, 26);
-    const ribbonMaterial = new MeshStandardMaterial({
-      color: 0xfbbf24,
-      metalness: 0.6,
-      roughness: 0.3,
-    });
-    const ribbonH = new Mesh(ribbonHGeometry, ribbonMaterial);
-    ribbonH.position.y = 0;
-    presentGroup.add(ribbonH);
+    // Pin head (sphere on top) - smaller, positioned higher
+    const sphereGeometry = new SphereGeometry(8, 32, 32);
+    const sphere = new Mesh(sphereGeometry, pinMaterial);
+    sphere.position.y = 28;
+    pinGroup.add(sphere);
 
-    // Vertical ribbon (gold)
-    const ribbonVGeometry = new BoxGeometry(5, 26, 26);
-    const ribbonV = new Mesh(ribbonVGeometry, ribbonMaterial);
-    ribbonV.position.x = 0;
-    presentGroup.add(ribbonV);
+    // Pin body (cone pointing down) - taller, thinner
+    const coneGeometry = new ConeGeometry(6, 25, 32);
+    const cone = new Mesh(coneGeometry, pinMaterial);
+    cone.rotation.x = Math.PI; // Point downward
+    cone.position.y = 8;
+    pinGroup.add(cone);
 
-    // Bow on top (gold)
-    const bowGeometry = new BoxGeometry(10, 8, 10);
-    const bow = new Mesh(bowGeometry, ribbonMaterial);
-    bow.position.y = 16;
-    bow.rotation.y = Math.PI / 4;
-    presentGroup.add(bow);
-
-    // Position the present slightly above ground
-    presentGroup.position.y = 15;
-
-    scene.add(presentGroup);
+    scene.add(pinGroup);
+    console.log('[WebGL] Pin marker created');
   };
 
   webglOverlayView.onContextRestored = ({ gl }: google.maps.WebGLStateOptions) => {
+    console.log('[WebGL] onContextRestored called', gl);
     renderer = new WebGLRenderer({
       canvas: gl.canvas,
       context: gl,
@@ -93,75 +87,71 @@ export function createPresentOverlay(options: PresentOverlayOptions): google.map
     });
     renderer.autoClear = false;
 
-    // Start the animation loop
-    animationStartTime = Date.now();
-    startCameraAnimation();
-  };
-
-  const startCameraAnimation = () => {
-    // Initial camera position
+    // Move camera to target position first
     map.moveCamera({
       center: position,
-      zoom: 18,
-      tilt: 0,
-      heading: 0,
+      zoom: animationOptions.zoom,
+      tilt: animationOptions.tilt,
+      heading: animationOptions.heading,
     });
 
+    // Start animation loop (matching Google's working pattern)
+    console.log('[WebGL] Starting animation loop');
+    let frameCount = 0;
+
     renderer.setAnimationLoop(() => {
-      if (!animationStartTime) return;
+      try {
+        frameCount++;
+        webglOverlayView.requestRedraw();
 
-      const elapsed = Date.now() - animationStartTime;
-      const duration = 8000; // 8 seconds total animation
-
-      // Phase 1: Tilt up (0-2s)
-      if (elapsed < 2000) {
-        const progress = elapsed / 2000;
-        map.moveCamera({
-          tilt: progress * 67.5,
-          zoom: 18 - progress * 0.5,
-        });
-      }
-      // Phase 2: Rotate around (2-7s)
-      else if (elapsed < 7000) {
-        const rotationProgress = (elapsed - 2000) / 5000;
-        map.moveCamera({
-          heading: rotationProgress * 360,
-          zoom: 17.5 - rotationProgress * 0.5,
-        });
-      }
-      // Phase 3: Zoom out and settle (7-8s)
-      else if (elapsed < duration) {
-        const settleProgress = (elapsed - 7000) / 1000;
-        map.moveCamera({
-          tilt: 67.5 - settleProgress * 22.5,
-          zoom: 17 + settleProgress * 0.5,
-        });
-      }
-      // Animation complete
-      else {
-        renderer.setAnimationLoop(null);
-        if (onAnimationComplete) {
-          onAnimationComplete();
+        // Phase 1: Tilt up (0 -> 67.5)
+        if (animationOptions.tilt < 67.5) {
+          animationOptions.tilt += 0.5;
+          if (frameCount % 20 === 0) {
+            console.log('[WebGL] Phase 1 - tilt:', animationOptions.tilt);
+          }
         }
-      }
+        // Phase 2: Rotate around (0 -> 360)
+        else if (animationOptions.heading <= 360) {
+          animationOptions.heading += 0.2;
+          animationOptions.zoom -= 0.0005;
+          if (frameCount % 100 === 0) {
+            console.log('[WebGL] Phase 2 - heading:', animationOptions.heading, 'zoom:', animationOptions.zoom);
+          }
+        }
+        // Animation complete
+        else {
+          console.log('[WebGL] Animation complete');
+          renderer.setAnimationLoop(null);
+          if (onAnimationComplete) {
+            onAnimationComplete();
+          }
+          return;
+        }
 
-      // Rotate the present continuously
-      if (presentGroup) {
-        presentGroup.rotation.y += 0.02;
+        map.moveCamera({
+          tilt: animationOptions.tilt,
+          heading: animationOptions.heading,
+          zoom: animationOptions.zoom,
+        });
+      } catch (err) {
+        console.error('[WebGL] Animation error:', err);
+        renderer.setAnimationLoop(null);
       }
-
-      webglOverlayView.requestRedraw();
     });
   };
 
   webglOverlayView.onDraw = ({ transformer }: google.maps.WebGLDrawOptions) => {
-    if (!scene || !camera || !renderer) return;
+    if (!scene || !camera || !renderer) {
+      console.log('[WebGL] onDraw skipped - missing:', { scene: !!scene, camera: !!camera, renderer: !!renderer });
+      return;
+    }
 
-    // Update camera matrix to position the present at the target location
+    // Update camera matrix to position the pin at the target location
     const matrix = transformer.fromLatLngAltitude({
       lat: position.lat,
       lng: position.lng,
-      altitude: 50,
+      altitude: 100,
     });
     camera.projectionMatrix = new Matrix4().fromArray(matrix);
 
@@ -184,7 +174,9 @@ export function createPresentOverlay(options: PresentOverlayOptions): google.map
   };
 
   // Add overlay to map
+  console.log('[WebGL] Setting map on overlay');
   webglOverlayView.setMap(map);
+  console.log('[WebGL] Overlay added to map');
 
   return webglOverlayView;
 }
