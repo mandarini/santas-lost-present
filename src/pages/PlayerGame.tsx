@@ -101,24 +101,24 @@ export default function PlayerGame() {
     const lng = e.latLng.lng();
 
     const google = (window as any).google;
+    console.log(playerRef.current?.color);
 
     // Create custom marker content with player's color and name
     const markerContent = document.createElement('div');
-    markerContent.innerHTML = `
-      <div style="
-        background: ${playerRef.current?.color || '#EF4444'};
-        padding: 8px 16px;
-        border-radius: 24px;
-        color: white;
-        font-weight: bold;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-        border: 3px solid white;
-        font-size: 14px;
-        white-space: nowrap;
-      ">
-        📍 ${playerRef.current?.nickname || 'You'}
-      </div>
+    markerContent.style.cssText = `
+      display: inline-block;
+      background: ${playerRef.current?.color || '#EF4444'};
+      padding: 8px 16px;
+      border-radius: 24px;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      border: 3px solid white;
+      font-size: 14px;
+      white-space: nowrap;
     `;
+    markerContent.textContent = `📍 ${playerRef.current?.nickname || 'You'}`;
+    console.log('Creating marker at:', lat, lng);
 
     if (!currentMarker) {
       const newMarker = new google.maps.marker.AdvancedMarkerElement({
@@ -149,11 +149,14 @@ export default function PlayerGame() {
       if (error) throw error;
 
       // Update distance and marker color based on server response
+      console.log('Server response:', data);
       if (data?.distance_m !== undefined && data.distance_m !== null) {
+        console.log('Distance:', data.distance_m, 'Color:', getMarkerColor(data.distance_m));
         setLastDistance(data.distance_m);
         updateMarkerWithDistance(data.distance_m);
         setToast(getTemperatureLabel(data.distance_m));
       } else {
+        console.log('No distance returned from server');
         setToast('Guess submitted!');
       }
     } catch (err: any) {
@@ -166,26 +169,28 @@ export default function PlayerGame() {
 
   const updateMarkerWithDistance = (distance: number) => {
     const currentMarker = markerRef.current;
-    if (!currentMarker) return;
+    if (!currentMarker) {
+      console.log('No marker to update');
+      return;
+    }
 
     const color = getMarkerColor(distance);
+    console.log('Updating marker with distance:', distance, 'color:', color);
     const markerContent = document.createElement('div');
-    markerContent.innerHTML = `
-      <div style="
-        background: ${color};
-        padding: 8px 16px;
-        border-radius: 24px;
-        color: white;
-        font-weight: bold;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-        border: 3px solid white;
-        font-size: 14px;
-        white-space: nowrap;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-      ">
-        ${playerRef.current?.nickname || 'You'}
-      </div>
+    markerContent.style.cssText = `
+      display: inline-block;
+      background: ${color};
+      padding: 8px 16px;
+      border-radius: 24px;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      border: 3px solid white;
+      font-size: 14px;
+      white-space: nowrap;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
     `;
+    markerContent.textContent = playerRef.current?.nickname || 'You';
     currentMarker.content = markerContent;
   };
 
