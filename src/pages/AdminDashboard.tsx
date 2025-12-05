@@ -53,7 +53,6 @@ export default function AdminDashboard() {
         center: LONDON_CENTER,
         zoom: 10,
         mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || undefined,
-        renderingType: 'WEBGL', // Required for WebGLOverlayView
         restriction: {
           latLngBounds: LONDON_BOUNDS,
           strictBounds: false,
@@ -89,7 +88,7 @@ export default function AdminDashboard() {
 
       newDistances.set(playerId, distance);
 
-      if (round.status === 'running' && distance <= 20000) { // DEBUG: 20km for testing
+      if (round.status === 'running' && distance <= 1000) {
         triggerWin(playerId, distance);
         return;
       }
