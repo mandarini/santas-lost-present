@@ -13,7 +13,7 @@ import {
   getMarkerColor,
   randomLondonLocation,
 } from '../lib/googleMaps';
-import { Play, Square, RotateCcw, Wand2, Trophy, Users, LogOut, Gift } from 'lucide-react';
+import { Play, Square, RotateCcw, Wand2, Trophy, Users, LogOut, Gift, Eye, EyeOff } from 'lucide-react';
 import { createPresentOverlay, removePresentOverlay } from '../components/WebGLPresentOverlay';
 
 export default function AdminDashboard() {
@@ -272,6 +272,25 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleToggleShowDistance = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { error } = await supabase.functions.invoke('admin_actions', {
+        body: { action: 'toggle_show_distance' },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Error toggling show distance:', err);
+      alert(err.message || 'Failed to toggle show distance');
+    }
+  };
+
   const sortedPlayers = Array.from(guesses.entries())
     .map(([playerId, guess]) => {
       const player = players.get(playerId);
@@ -391,7 +410,27 @@ export default function AdminDashboard() {
           )}
         </div>
 
-{/* Target location is hidden to prevent cheating - only shown in finale */}
+        {/* Show Distance Toggle */}
+        <div className="mb-6 p-3 bg-gray-800 rounded-lg">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-300">Show distance to players</span>
+            <button
+              onClick={handleToggleShowDistance}
+              className={`relative w-12 h-6 rounded-full transition-colors ${
+                round?.show_distance ? 'bg-green-500' : 'bg-gray-600'
+              }`}
+            >
+              <div
+                className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                  round?.show_distance ? 'translate-x-7' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            {round?.show_distance ? 'Players can see their distance (e.g. "5.2 km")' : 'Players only see temperature hints'}
+          </p>
+        </div>
 
         <div className="flex-1 overflow-y-auto">
           <h2 className="text-lg font-bold mb-3">Players by Distance</h2>

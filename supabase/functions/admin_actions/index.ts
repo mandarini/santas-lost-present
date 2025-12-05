@@ -224,6 +224,29 @@ Deno.serve(async (req: Request) => {
         break;
       }
 
+      case 'toggle_show_distance': {
+        const { data: round } = await supabase
+          .from('rounds')
+          .select('show_distance')
+          .eq('id', 'main-round')
+          .single();
+
+        const { error: updateError } = await supabase
+          .from('rounds')
+          .update({
+            show_distance: !round?.show_distance,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', 'main-round');
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        result = { ok: true, show_distance: !round?.show_distance };
+        break;
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: 'Unknown action' }),

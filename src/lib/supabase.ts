@@ -20,6 +20,7 @@ export type Round = {
   target_lng: number | null;
   winner_player_id: string | null;
   winner_distance_m: number | null;
+  show_distance: boolean;
   created_at: string;
   updated_at: string;
 };

@@ -163,7 +163,17 @@ export default function PlayerGame() {
         console.log('Distance:', data.distance_m, 'Color:', getMarkerColor(data.distance_m));
         setLastDistance(data.distance_m);
         updateMarkerWithDistance(data.distance_m);
-        setToast(getTemperatureLabel(data.distance_m));
+
+        // Show distance in toast if admin enabled it
+        const tempLabel = getTemperatureLabel(data.distance_m);
+        if (roundRef.current?.show_distance) {
+          const distanceStr = data.distance_m >= 1000
+            ? `${(data.distance_m / 1000).toFixed(1)} km`
+            : `${Math.round(data.distance_m)} m`;
+          setToast(`${tempLabel} (${distanceStr})`);
+        } else {
+          setToast(tempLabel);
+        }
       } else {
         console.log('No distance returned from server');
         setToast('Guess submitted!');
@@ -278,6 +288,13 @@ export default function PlayerGame() {
                   style={{ color: getMarkerColor(lastDistance) }}
                 >
                   {getTemperatureLabel(lastDistance)}
+                  {round?.show_distance && (
+                    <span className="text-sm font-normal text-gray-600 ml-2">
+                      ({lastDistance >= 1000
+                        ? `${(lastDistance / 1000).toFixed(1)} km`
+                        : `${Math.round(lastDistance)} m`})
+                    </span>
+                  )}
                 </p>
                 <p className="text-xs text-gray-500">Tap to move your guess</p>
               </div>
