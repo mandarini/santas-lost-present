@@ -4,6 +4,7 @@ import PlayerGame from './pages/PlayerGame';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminLogin from './pages/AdminLogin';
 import Instructions from './pages/Instructions';
+import Spitalfields3D from './pages/Spitalfields3D';
 import AuthGuard from './components/AuthGuard';
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
         <Route path="/" element={<Join />} />
         <Route path="/game" element={<PlayerGame />} />
         <Route path="/instructions" element={<Instructions />} />
+        <Route path="/spitalfields" element={<Spitalfields3D />} />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route
           path="/admin"
