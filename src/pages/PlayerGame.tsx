@@ -85,6 +85,7 @@ export default function PlayerGame() {
         strokeWeight: 3,
         fillColor: '#c41e3a',
         fillOpacity: opacity * 0.35,
+        clickable: false, // Allow clicks to pass through to the map
         map: mapInstance,
       });
       setGiftPolygon(polygon);

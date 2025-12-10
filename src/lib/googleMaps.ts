@@ -101,7 +101,7 @@ export function randomLondonLocation() {
 export function generateGiftPolygon(
   centerLat: number,
   centerLng: number,
-  sizeMeters: number = 400
+  sizeMeters: number = 2000
 ): Array<{ lat: number; lng: number }> {
   // Convert meters to approximate lat/lng offset
   // 1 degree lat ≈ 111,000m, 1 degree lng ≈ 111,000m * cos(lat)
