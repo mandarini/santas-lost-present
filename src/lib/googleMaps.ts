@@ -97,3 +97,45 @@ export function randomLondonLocation() {
     lng: LONDON_BOUNDS.west + Math.random() * (LONDON_BOUNDS.east - LONDON_BOUNDS.west),
   };
 }
+
+export function generateGiftPolygon(
+  centerLat: number,
+  centerLng: number,
+  sizeMeters: number = 400
+): Array<{ lat: number; lng: number }> {
+  // Convert meters to approximate lat/lng offset
+  // 1 degree lat ≈ 111,000m, 1 degree lng ≈ 111,000m * cos(lat)
+  const latOffset = sizeMeters / 111000;
+  const lngOffset = sizeMeters / (111000 * Math.cos((centerLat * Math.PI) / 180));
+
+  // Gift box with bow shape (simplified)
+  // The polygon forms a box with a decorative bow on top
+  return [
+    // Box bottom-right
+    { lat: centerLat - latOffset, lng: centerLng + lngOffset * 0.8 },
+    // Box bottom-left
+    { lat: centerLat - latOffset, lng: centerLng - lngOffset * 0.8 },
+    // Box top-left
+    { lat: centerLat + latOffset * 0.3, lng: centerLng - lngOffset * 0.8 },
+    // Bow left point
+    { lat: centerLat + latOffset * 0.6, lng: centerLng - lngOffset * 1.0 },
+    // Bow top-left
+    { lat: centerLat + latOffset * 0.8, lng: centerLng - lngOffset * 0.4 },
+    // Bow center top
+    { lat: centerLat + latOffset, lng: centerLng },
+    // Bow top-right
+    { lat: centerLat + latOffset * 0.8, lng: centerLng + lngOffset * 0.4 },
+    // Bow right point
+    { lat: centerLat + latOffset * 0.6, lng: centerLng + lngOffset * 1.0 },
+    // Box top-right
+    { lat: centerLat + latOffset * 0.3, lng: centerLng + lngOffset * 0.8 },
+  ];
+}
+
+export function getPolygonOpacity(guessCount: number): number {
+  if (guessCount >= 40) return 1.0;
+  if (guessCount >= 30) return 0.75;
+  if (guessCount >= 20) return 0.5;
+  if (guessCount >= 10) return 0.25;
+  return 0;
+}

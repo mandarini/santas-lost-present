@@ -12,8 +12,9 @@ import {
   calculateDistance,
   getMarkerColor,
   randomLondonLocation,
+  generateGiftPolygon,
 } from '../lib/googleMaps';
-import { Play, Square, RotateCcw, Wand2, Trophy, Users, LogOut, Gift, Eye, EyeOff } from 'lucide-react';
+import { Play, Square, RotateCcw, Wand2, Trophy, Users, LogOut, Gift, Hexagon } from 'lucide-react';
 import { createPresentOverlay, removePresentOverlay } from '../components/WebGLPresentOverlay';
 
 export default function AdminDashboard() {
@@ -31,6 +32,7 @@ export default function AdminDashboard() {
   const [showGiftOverlay, setShowGiftOverlay] = useState(false);
   const [webglOverlay, setWebglOverlay] = useState<google.maps.WebGLOverlayView | null>(null);
   const [winnerName, setWinnerName] = useState<string | null>(null);
+  const [giftPolygon, setGiftPolygon] = useState<google.maps.Polygon | null>(null);
 
   useEffect(() => {
     initMap();
@@ -40,7 +42,40 @@ export default function AdminDashboard() {
     if (!map || !round || round.status !== 'running') return;
 
     updateAllMarkers();
-  }, [guesses, round, map, players]);
+  }, [guesses, round, map, players, giftPolygon]);
+
+  // Effect to render polygon when in polygon mode
+  useEffect(() => {
+    if (!map || !round || round.mode !== 'polygon' || !round.polygon_coords) {
+      // Clean up existing polygon if mode changed
+      if (giftPolygon) {
+        giftPolygon.setMap(null);
+        setGiftPolygon(null);
+      }
+      return;
+    }
+
+    // Don't recreate if already exists
+    if (giftPolygon) return;
+
+    const google = (window as any).google;
+    const polygon = new google.maps.Polygon({
+      paths: round.polygon_coords,
+      strokeColor: '#c41e3a',
+      strokeOpacity: 1,
+      strokeWeight: 3,
+      fillColor: '#c41e3a',
+      fillOpacity: 0.35,
+      map: map,
+    });
+
+    setGiftPolygon(polygon);
+
+    // Cleanup on unmount
+    return () => {
+      polygon.setMap(null);
+    };
+  }, [map, round?.mode, round?.polygon_coords]);
 
   const initMap = async () => {
     if (!mapRef.current) return;
@@ -73,8 +108,34 @@ export default function AdminDashboard() {
   const updateAllMarkers = () => {
     if (!map || !round || !round.target_lat || !round.target_lng) return;
 
+    const google = (window as any).google;
     const newDistances = new Map<string, number>();
 
+    // Handle polygon mode
+    if (round.mode === 'polygon' && round.polygon_coords && giftPolygon) {
+      guesses.forEach((guess, playerId) => {
+        const player = players.get(playerId);
+        if (!player) return;
+
+        // Check if guess is inside polygon using containsLocation
+        const point = new google.maps.LatLng(guess.lat, guess.lng);
+        const isInside = google.maps.geometry.poly.containsLocation(point, giftPolygon);
+
+        if (round.status === 'running' && isInside) {
+          triggerWin(playerId, 0); // 0 distance for polygon win
+          return;
+        }
+
+        // For polygon mode, use a neutral color (gray) for markers
+        const color = isInside ? '#22c55e' : '#6b7280';
+        updateMarker(playerId, guess, player, color);
+      });
+
+      setPlayerDistances(newDistances);
+      return;
+    }
+
+    // Original distance-based mode logic
     guesses.forEach((guess, playerId) => {
       const player = players.get(playerId);
       if (!player) return;
@@ -178,7 +239,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleStartRound = async (mode: 'normal' | 'elf') => {
+  const handleStartRound = async (mode: 'normal' | 'elf' | 'polygon') => {
     const location = targetLocation || randomLondonLocation();
 
     try {
@@ -189,12 +250,18 @@ export default function AdminDashboard() {
         return;
       }
 
+      // Generate polygon coords for polygon mode
+      const polygon_coords = mode === 'polygon'
+        ? generateGiftPolygon(location.lat, location.lng)
+        : undefined;
+
       const { error } = await supabase.functions.invoke('admin_actions', {
         body: {
           action: 'start_round',
           mode,
           target_lat: location.lat,
           target_lng: location.lng,
+          polygon_coords,
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -263,6 +330,12 @@ export default function AdminDashboard() {
       if (webglOverlay) {
         removePresentOverlay(webglOverlay);
         setWebglOverlay(null);
+      }
+
+      // Clean up polygon
+      if (giftPolygon) {
+        giftPolygon.setMap(null);
+        setGiftPolygon(null);
       }
     } catch (err: any) {
       console.error('Error resetting round:', err);
@@ -383,6 +456,15 @@ export default function AdminDashboard() {
               >
                 <Wand2 className="w-5 h-5" />
                 Start Elf Mode
+              </button>
+
+              <button
+                onClick={() => handleStartRound('polygon')}
+                disabled={actionLoading}
+                className="w-full bg-rose-600 hover:bg-rose-700 disabled:bg-gray-700 text-white py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition"
+              >
+                <Hexagon className="w-5 h-5" />
+                Start Polygon Mode
               </button>
             </>
           )}
