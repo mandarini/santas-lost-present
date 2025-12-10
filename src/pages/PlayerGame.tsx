@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useDeviceId } from '../hooks/useDeviceId';
 import { usePlayer } from '../hooks/usePlayer';
 import { useRound } from '../hooks/useRound';
+import { useGuesses } from '../hooks/useGuesses';
 import { supabase } from '../lib/supabase';
-import { loadGoogleMaps, LONDON_CENTER, LONDON_BOUNDS, getMarkerColor, getTemperatureLabel } from '../lib/googleMaps';
-import { Gift } from 'lucide-react';
+import { loadGoogleMaps, LONDON_CENTER, LONDON_BOUNDS, getMarkerColor, getTemperatureLabel, getPolygonOpacity } from '../lib/googleMaps';
+import { Gift, BookOpen, Home } from 'lucide-react';
 
 export default function PlayerGame() {
   const navigate = useNavigate();
   const deviceId = useDeviceId();
   const { player, loading: playerLoading } = usePlayer(deviceId);
   const { round } = useRound();
+  const guesses = useGuesses(round?.round_no ?? null);
 
   const mapRef = useRef<HTMLDivElement>(null);
   const [, setMap] = useState<any>(null);
@@ -19,6 +21,7 @@ export default function PlayerGame() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [lastDistance, setLastDistance] = useState<number | null>(null);
+  const [giftPolygon, setGiftPolygon] = useState<google.maps.Polygon | null>(null);
 
   // Use refs to avoid stale closures in map click handler
   const roundRef = useRef(round);
@@ -54,6 +57,55 @@ export default function PlayerGame() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
+
+  // Effect to render/update polygon in polygon mode
+  useEffect(() => {
+    const mapInstance = mapInstanceRef.current;
+    if (!mapInstance || !round || round.mode !== 'polygon' || !round.polygon_coords) {
+      // Clean up existing polygon if mode changed
+      if (giftPolygon) {
+        giftPolygon.setMap(null);
+        setGiftPolygon(null);
+      }
+      return;
+    }
+
+    const google = (window as any).google;
+    if (!google) return;
+
+    const guessCount = guesses.size;
+    const opacity = getPolygonOpacity(guessCount);
+
+    // Create polygon if doesn't exist
+    if (!giftPolygon) {
+      const polygon = new google.maps.Polygon({
+        paths: round.polygon_coords,
+        strokeColor: '#c41e3a',
+        strokeOpacity: opacity,
+        strokeWeight: 3,
+        fillColor: '#c41e3a',
+        fillOpacity: opacity * 0.35,
+        clickable: false, // Allow clicks to pass through to the map
+        map: mapInstance,
+      });
+      setGiftPolygon(polygon);
+    } else {
+      // Update opacity based on guess count
+      giftPolygon.setOptions({
+        strokeOpacity: opacity,
+        fillOpacity: opacity * 0.35,
+      });
+    }
+  }, [round?.mode, round?.polygon_coords, guesses.size, mapInstanceRef.current]);
+
+  // Cleanup polygon on unmount
+  useEffect(() => {
+    return () => {
+      if (giftPolygon) {
+        giftPolygon.setMap(null);
+      }
+    };
+  }, []);
 
   const initMap = async () => {
     if (!mapRef.current) return;
@@ -157,6 +209,12 @@ export default function PlayerGame() {
 
       if (error) throw error;
 
+      // In polygon mode, no distance feedback - just confirm submission
+      if (roundRef.current?.mode === 'polygon') {
+        setToast('Guess submitted!');
+        return;
+      }
+
       // Update distance and marker color based on server response
       console.log('Server response:', data);
       if (data?.distance_m !== undefined && data.distance_m !== null) {
@@ -248,11 +306,29 @@ export default function PlayerGame() {
 
       <div className="absolute top-4 left-4 right-4 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-4">
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-600">Playing as</p>
-            <p className="text-lg font-bold" style={{ color: player.color }}>
-              {player.nickname}
-            </p>
+          <div className="flex items-center gap-3">
+            <div>
+              <p className="text-sm text-gray-600">Playing as</p>
+              <p className="text-lg font-bold" style={{ color: player.color }}>
+                {player.nickname}
+              </p>
+            </div>
+            <Link
+              to="/"
+              className="flex items-center gap-1 text-gray-600 hover:text-red-600 transition-colors text-sm"
+              title="Home"
+            >
+              <Home className="w-4 h-4" />
+              <span className="hidden sm:inline">Home</span>
+            </Link>
+            <Link
+              to="/instructions"
+              className="flex items-center gap-1 text-gray-600 hover:text-red-600 transition-colors text-sm"
+              title="View Instructions"
+            >
+              <BookOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Help</span>
+            </Link>
           </div>
           <div className="text-right">
             {round?.status === 'idle' && (
@@ -262,7 +338,7 @@ export default function PlayerGame() {
             )}
             {round?.status === 'running' && (
               <span className="inline-block bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium animate-pulse">
-                Round {round.round_no} - {round.mode === 'elf' ? 'Elf Mode' : 'Normal'}
+                Round {round.round_no} - {round.mode === 'elf' ? 'Elf Mode' : round.mode === 'polygon' ? 'Polygon Hunt' : 'Normal'}
               </span>
             )}
             {round?.status === 'finished' && (
@@ -276,7 +352,17 @@ export default function PlayerGame() {
 
       {round?.status === 'running' && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg px-6 py-3">
-          {lastDistance !== null ? (
+          {round.mode === 'polygon' ? (
+            // Polygon mode - no distance feedback, show progress hint
+            <div className="text-center">
+              <p className="text-sm font-medium text-gray-700">
+                {guesses.size > 0
+                  ? `${guesses.size} players guessing - find the hidden polygon!`
+                  : 'Tap anywhere to place your guess'}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">Get 10 players inside to win!</p>
+            </div>
+          ) : lastDistance !== null ? (
             <div className="flex items-center gap-3">
               <div
                 className="w-8 h-8 rounded-full border-2 border-white shadow-lg"

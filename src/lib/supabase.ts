@@ -12,7 +12,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export type Round = {
   id: string;
   status: 'idle' | 'running' | 'finished';
-  mode: 'normal' | 'elf';
+  mode: 'normal' | 'elf' | 'polygon';
   round_no: number;
   started_at: string | null;
   ended_at: string | null;
@@ -21,6 +21,7 @@ export type Round = {
   winner_player_id: string | null;
   winner_distance_m: number | null;
   show_distance: boolean;
+  polygon_coords: Array<{ lat: number; lng: number }> | null;
   created_at: string;
   updated_at: string;
 };

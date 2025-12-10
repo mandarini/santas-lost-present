@@ -64,11 +64,22 @@ Deno.serve(async (req: Request) => {
 
     switch (action) {
       case 'start_round': {
-        const { mode, target_lat, target_lng } = body;
+        const { mode, target_lat, target_lng, polygon_coords } = body;
 
         if (!mode || !target_lat || !target_lng) {
           return new Response(
             JSON.stringify({ error: 'mode, target_lat, and target_lng are required' }),
+            {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            }
+          );
+        }
+
+        // For polygon mode, polygon_coords is required
+        if (mode === 'polygon' && !polygon_coords) {
+          return new Response(
+            JSON.stringify({ error: 'polygon_coords is required for polygon mode' }),
             {
               status: 400,
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -92,6 +103,7 @@ Deno.serve(async (req: Request) => {
             round_no: newRoundNo,
             target_lat,
             target_lng,
+            polygon_coords: mode === 'polygon' ? polygon_coords : null,
             started_at: new Date().toISOString(),
             ended_at: null,
             winner_player_id: null,
@@ -180,6 +192,7 @@ Deno.serve(async (req: Request) => {
             ended_at: null,
             target_lat: null,
             target_lng: null,
+            polygon_coords: null,
             winner_player_id: null,
             winner_distance_m: null,
             updated_at: new Date().toISOString()

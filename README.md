@@ -9,14 +9,15 @@ A real-time, multiplayer Christmas treasure hunt game built with React, Supabase
 ### Features
 
 - **Real-time multiplayer** - All players see updates instantly via Supabase Realtime
-- **Two game modes:**
+- **Three game modes:**
   - **Normal Mode** - Target stays in one place
   - **Elf Mode** - Target moves every 20 seconds (powered by pg_cron)
+  - **Polygon Hunt Mode** - Collaborative mode with hidden polygon area
 - **Mobile-optimized** - Players use their phones to place guesses
 - **Admin dashboard** - Control the game and display markers for the audience
 - **Automatic nickname assignment** - Players get fun Christmas names like "JollyElfHunter"
 - **Distance-based colors** - Markers show how close players are (blue = cold, red = hot)
-- **Win detection** - Automatic finale when someone gets within 10 meters
+- **Win detection** - Automatic finale when someone gets within 1 kilometer (Normal/Elf) or 10 players fill polygon
 
 ## Prerequisites
 
@@ -62,20 +63,22 @@ npm run dev
 
 ## How to Play
 
-### For Players (Mobile)
+📖 **For detailed game instructions covering all three game modes, see [INSTRUCTIONS.md](INSTRUCTIONS.md)**
 
+### Quick Start
+
+**For Players (Mobile):**
 1. Navigate to the game URL on your phone
-2. You'll automatically be assigned a Christmas nickname
+2. Click "Join the Hunt!" to get assigned a Christmas nickname
 3. Wait for the admin to start the round
 4. Tap anywhere on the map to place your guess
 5. Update your guess as many times as you want
-6. Get within 10 meters to win!
+6. Get within 1 kilometer to win (Normal/Elf mode) or help fill the polygon (Polygon mode)!
 
-### For Admin (Big Screen)
-
+**For Admin (Big Screen):**
 1. Navigate to `/admin` on the presentation screen
 2. Log in with GitHub OAuth (email must be in admin allowlist)
-3. Click "Start Normal Mode" or "Start Elf Mode"
+3. Click "Start Normal Mode", "Start Elf Mode", or "Start Polygon Mode"
 4. Watch as player markers appear and change colors based on distance
 5. The game automatically detects when someone wins
 6. Use "Stop Round" or "Reset Round" to control the game
@@ -86,20 +89,11 @@ npm run dev
 
 - **Start Normal Mode** - Begin a round with a fixed target location
 - **Start Elf Mode** - Begin a round where the target moves every 20 seconds
+- **Start Polygon Mode** - Begin a collaborative round with a hidden polygon area
 - **Stop Round** - End the current round manually
 - **Reset Round** - Clear all guesses and return to idle state
 - **Click Map** - Set a custom target location before starting
-
-### Distance Colors
-
-- 🔵 Blue (>5km) - Freezing
-- 🔵 Cyan (2-5km) - Cold
-- 🟢 Green (1-2km) - Cool
-- 🟢 Lime (500m-1km) - Warm
-- 🟠 Amber (200-500m) - Warmer
-- 🟠 Orange (100-200m) - Hot
-- 🔴 Red (50-100m) - Very Hot
-- 🔴 Dark Red (<50m) - On Fire!
+- **Toggle Show Distance** - Enable/disable exact distance display for players
 
 ## Architecture
 
@@ -127,6 +121,7 @@ npm run dev
 - **Routes:**
   - `/` - Join page with nickname assignment
   - `/game` - Player game view (mobile)
+  - `/instructions` - Detailed game instructions
   - `/admin` - Admin dashboard (big screen)
 
 - **Key Features:**
@@ -139,10 +134,31 @@ npm run dev
 
 ### Distance Calculation
 
-Distances are calculated client-side using Google Maps Geometry library:
-- Players never see how close they are (blind guessing)
-- Admin sees all distances and colors markers accordingly
-- Win condition (≤10m) is detected by admin client
+**Normal/Elf Modes:** Distances are calculated using the Haversine formula or [Google Maps Geometry library](https://developers.google.com/maps/documentation/javascript/geometry) (when available). See the implementation:
+
+- **[`calculateDistance()`](src/lib/googleMaps.ts#L36-L61)** - Calculates distance between two lat/lng coordinates in meters using [`google.maps.geometry.spherical.computeDistanceBetween()`](https://developers.google.com/maps/documentation/javascript/reference/geometry#spherical.computeDistanceBetween)
+- **[`getMarkerColor()`](src/lib/googleMaps.ts#L63-L80)** - Generates HSL color gradient from red (close) to blue (far), max distance 30km
+- **[`getTemperatureLabel()`](src/lib/googleMaps.ts#L82-L92)** - Returns temperature label based on distance thresholds (1km, 2km, 5km, 10km, 15km, 20km, 25km, 30km)
+
+**Polygon Mode:** Uses Google Maps Geometry library's [`containsLocation()`](https://developers.google.com/maps/documentation/javascript/geometry#containsLocation) method to check if a player's guess point is inside the polygon. See [`AdminDashboard.tsx`](src/pages/AdminDashboard.tsx#L136-L138):
+
+- [`google.maps.geometry.poly.containsLocation(point, polygon)`](https://developers.google.com/maps/documentation/javascript/geometry#containsLocation) - Checks if a lat/lng point is inside a polygon (returns `true` if the point is within the polygon or on its edge)
+- Players inside the polygon are marked green, outside are marked gray
+
+**Distance thresholds (Normal/Elf modes):**
+- ≤ 1 km → 🎁 YOU WIN!
+- ≤ 2 km → 🔥 BURNING HOT!
+- ≤ 5 km → 🔥 Very Hot!
+- ≤ 10 km → 🌡️ Hot
+- ≤ 15 km → 🌡️ Warm
+- ≤ 20 km → 😐 Lukewarm
+- ≤ 25 km → ❄️ Cool
+- ≤ 30 km → 🥶 Very Cold
+- > 30 km → 🧊 Freezing!
+
+**Win detection:**
+- **Normal/Elf Mode:** Win detected when distance ≤ 1000m (1km) - see [`AdminDashboard.tsx`](src/pages/AdminDashboard.tsx#L179)
+- **Polygon Mode:** Win detected when 10 players are inside polygon using `containsLocation()` - see [`AdminDashboard.tsx`](src/pages/AdminDashboard.tsx#L153)
 
 ### Rate Limiting
 
