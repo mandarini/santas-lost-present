@@ -6,7 +6,7 @@ import { useRound } from '../hooks/useRound';
 import { useGuesses } from '../hooks/useGuesses';
 import { supabase } from '../lib/supabase';
 import { loadGoogleMaps, LONDON_CENTER, LONDON_BOUNDS, getMarkerColor, getTemperatureLabel, getPolygonOpacity } from '../lib/googleMaps';
-import { Gift, BookOpen } from 'lucide-react';
+import { Gift, BookOpen, Home } from 'lucide-react';
 
 export default function PlayerGame() {
   const navigate = useNavigate();
@@ -313,6 +313,14 @@ export default function PlayerGame() {
                 {player.nickname}
               </p>
             </div>
+            <Link
+              to="/"
+              className="flex items-center gap-1 text-gray-600 hover:text-red-600 transition-colors text-sm"
+              title="Home"
+            >
+              <Home className="w-4 h-4" />
+              <span className="hidden sm:inline">Home</span>
+            </Link>
             <Link
               to="/instructions"
               className="flex items-center gap-1 text-gray-600 hover:text-red-600 transition-colors text-sm"

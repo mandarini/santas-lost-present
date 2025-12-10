@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useDeviceId } from '../hooks/useDeviceId';
 import { usePlayer } from '../hooks/usePlayer';
@@ -7,13 +6,7 @@ import { Gift, Snowflake, BookOpen, Gamepad2 } from 'lucide-react';
 export default function Join() {
   const navigate = useNavigate();
   const deviceId = useDeviceId();
-  const { player, loading } = usePlayer(deviceId);
-
-  useEffect(() => {
-    if (player && !loading) {
-      navigate('/game');
-    }
-  }, [player, loading, navigate]);
+  const { loading } = usePlayer(deviceId);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-600 via-green-700 to-red-800 flex flex-col p-4 relative overflow-hidden">
@@ -79,7 +72,7 @@ export default function Join() {
 
           <div className="mt-8 text-sm text-gray-500 space-y-1">
             <p>Tap anywhere on the map to guess</p>
-            <p>Get within 10 meters to win!</p>
+            <p>Get within 1 kilometer to win!</p>
           </div>
         </div>
       </div>

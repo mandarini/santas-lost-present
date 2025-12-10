@@ -16,7 +16,7 @@ A real-time, multiplayer Christmas treasure hunt game built with React, Supabase
 - **Admin dashboard** - Control the game and display markers for the audience
 - **Automatic nickname assignment** - Players get fun Christmas names like "JollyElfHunter"
 - **Distance-based colors** - Markers show how close players are (blue = cold, red = hot)
-- **Win detection** - Automatic finale when someone gets within 10 meters
+- **Win detection** - Automatic finale when someone gets within 1 kilometer
 
 ## Prerequisites
 
@@ -69,7 +69,7 @@ npm run dev
 3. Wait for the admin to start the round
 4. Tap anywhere on the map to place your guess
 5. Update your guess as many times as you want
-6. Get within 10 meters to win!
+6. Get within 1 kilometer to win!
 
 ### For Admin (Big Screen)
 
@@ -142,7 +142,7 @@ npm run dev
 Distances are calculated client-side using Google Maps Geometry library:
 - Players never see how close they are (blind guessing)
 - Admin sees all distances and colors markers accordingly
-- Win condition (≤10m) is detected by admin client
+- Win condition (≤1km) is detected by admin client
 
 ### Rate Limiting
 
