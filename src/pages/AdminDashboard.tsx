@@ -13,6 +13,7 @@ import {
   getMarkerColor,
   randomLondonLocation,
   generateGiftPolygon,
+  getPolygonOpacity,
 } from '../lib/googleMaps';
 import { Play, Square, RotateCcw, Wand2, Trophy, Users, LogOut, Gift, Hexagon } from 'lucide-react';
 import { createPresentOverlay, removePresentOverlay } from '../components/WebGLPresentOverlay';
@@ -33,6 +34,8 @@ export default function AdminDashboard() {
   const [webglOverlay, setWebglOverlay] = useState<google.maps.WebGLOverlayView | null>(null);
   const [winnerName, setWinnerName] = useState<string | null>(null);
   const [giftPolygon, setGiftPolygon] = useState<google.maps.Polygon | null>(null);
+  const [playersInsidePolygon, setPlayersInsidePolygon] = useState<string[]>([]);
+  const [polygonWinners, setPolygonWinners] = useState<Player[]>([]);
 
   useEffect(() => {
     initMap();
@@ -44,7 +47,7 @@ export default function AdminDashboard() {
     updateAllMarkers();
   }, [guesses, round, map, players, giftPolygon]);
 
-  // Effect to render polygon when in polygon mode
+  // Effect to render polygon when in polygon mode (with opacity based on players inside)
   useEffect(() => {
     if (!map || !round || round.mode !== 'polygon' || !round.polygon_coords) {
       // Clean up existing polygon if mode changed
@@ -55,27 +58,38 @@ export default function AdminDashboard() {
       return;
     }
 
-    // Don't recreate if already exists
-    if (giftPolygon) return;
-
     const google = (window as any).google;
-    const polygon = new google.maps.Polygon({
-      paths: round.polygon_coords,
-      strokeColor: '#c41e3a',
-      strokeOpacity: 1,
-      strokeWeight: 3,
-      fillColor: '#c41e3a',
-      fillOpacity: 0.35,
-      map: map,
-    });
+    // Opacity based on players inside (not total guesses)
+    const opacity = getPolygonOpacity(playersInsidePolygon.length);
 
-    setGiftPolygon(polygon);
+    // Create polygon if doesn't exist
+    if (!giftPolygon) {
+      const polygon = new google.maps.Polygon({
+        paths: round.polygon_coords,
+        strokeColor: '#c41e3a',
+        strokeOpacity: opacity,
+        strokeWeight: 3,
+        fillColor: '#c41e3a',
+        fillOpacity: opacity * 0.35,
+        clickable: false,
+        map: map,
+      });
+      setGiftPolygon(polygon);
+    } else {
+      // Update opacity based on players inside
+      giftPolygon.setOptions({
+        strokeOpacity: opacity,
+        fillOpacity: opacity * 0.35,
+      });
+    }
 
     // Cleanup on unmount
     return () => {
-      polygon.setMap(null);
+      if (giftPolygon) {
+        giftPolygon.setMap(null);
+      }
     };
-  }, [map, round?.mode, round?.polygon_coords]);
+  }, [map, round?.mode, round?.polygon_coords, playersInsidePolygon.length]);
 
   const initMap = async () => {
     if (!mapRef.current) return;
@@ -113,6 +127,8 @@ export default function AdminDashboard() {
 
     // Handle polygon mode
     if (round.mode === 'polygon' && round.polygon_coords && giftPolygon) {
+      const insidePlayerIds: string[] = [];
+
       guesses.forEach((guess, playerId) => {
         const player = players.get(playerId);
         if (!player) return;
@@ -121,15 +137,26 @@ export default function AdminDashboard() {
         const point = new google.maps.LatLng(guess.lat, guess.lng);
         const isInside = google.maps.geometry.poly.containsLocation(point, giftPolygon);
 
-        if (round.status === 'running' && isInside) {
-          triggerWin(playerId, 0); // 0 distance for polygon win
-          return;
+        if (isInside) {
+          insidePlayerIds.push(playerId);
         }
 
-        // For polygon mode, use a neutral color (gray) for markers
+        // For polygon mode: green if inside, gray if outside
         const color = isInside ? '#22c55e' : '#6b7280';
         updateMarker(playerId, guess, player, color);
       });
+
+      // Update players inside polygon state
+      setPlayersInsidePolygon(insidePlayerIds);
+
+      // Check if 10 players are inside - trigger group win!
+      if (round.status === 'running' && insidePlayerIds.length >= 10) {
+        const winners = insidePlayerIds
+          .slice(0, 10)
+          .map(id => players.get(id))
+          .filter((p): p is Player => p !== undefined);
+        triggerPolygonWin(winners);
+      }
 
       setPlayerDistances(newDistances);
       return;
@@ -239,6 +266,39 @@ export default function AdminDashboard() {
     }
   };
 
+  const triggerPolygonWin = async (winners: Player[]) => {
+    if (!round || round.status !== 'running') return;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Stop the round (no single winner for polygon mode)
+      await supabase.functions.invoke('admin_actions', {
+        body: { action: 'stop_round' },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      // Set the winners for display
+      setPolygonWinners(winners);
+      setShowGiftOverlay(true);
+
+      // Show 3D present animation at the target location
+      if (map && round.target_lat && round.target_lng) {
+        const overlay = createPresentOverlay({
+          map,
+          position: { lat: round.target_lat, lng: round.target_lng },
+          onAnimationComplete: () => {},
+        });
+        setWebglOverlay(overlay);
+      }
+    } catch (err) {
+      console.error('Error triggering polygon win:', err);
+    }
+  };
+
   const handleStartRound = async (mode: 'normal' | 'elf' | 'polygon') => {
     const location = targetLocation || randomLondonLocation();
 
@@ -337,6 +397,10 @@ export default function AdminDashboard() {
         giftPolygon.setMap(null);
         setGiftPolygon(null);
       }
+
+      // Clear polygon mode state
+      setPlayersInsidePolygon([]);
+      setPolygonWinners([]);
     } catch (err: any) {
       console.error('Error resetting round:', err);
       alert(err.message || 'Failed to reset round');
@@ -435,6 +499,28 @@ export default function AdminDashboard() {
             </p>
             <p className="text-xl font-bold">{guesses.size}</p>
           </div>
+
+          {/* Polygon mode progress */}
+          {round?.mode === 'polygon' && round.status === 'running' && (
+            <div className="p-3 bg-rose-900/50 rounded-lg">
+              <p className="text-sm text-gray-400 flex items-center gap-1">
+                <Hexagon className="w-4 h-4" />
+                Inside Polygon
+              </p>
+              <p className="text-2xl font-bold text-rose-400">
+                {playersInsidePolygon.length} / 10
+              </p>
+              <div className="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-rose-500 transition-all duration-300"
+                  style={{ width: `${Math.min(playersInsidePolygon.length / 10 * 100, 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Visibility: {Math.round(getPolygonOpacity(playersInsidePolygon.length) * 100)}%
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="space-y-2 mb-6">
@@ -543,7 +629,7 @@ export default function AdminDashboard() {
       <div className="flex-1 relative">
         <div ref={mapRef} className="w-full h-full" />
 
-        {/* Winner celebration overlay */}
+        {/* Winner celebration overlay - single winner */}
         {showGiftOverlay && winnerName && (
           <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10">
             <div className="bg-gradient-to-r from-yellow-400 via-red-500 to-yellow-400 text-white px-8 py-4 rounded-2xl shadow-2xl animate-bounce">
@@ -554,6 +640,33 @@ export default function AdminDashboard() {
                   <p className="text-2xl font-bold">{winnerName} Wins!</p>
                 </div>
                 <Gift className="w-10 h-10" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Polygon mode winners overlay - multiple winners */}
+        {showGiftOverlay && polygonWinners.length > 0 && (
+          <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10 max-w-md w-full px-4">
+            <div className="bg-gradient-to-r from-yellow-400 via-red-500 to-yellow-400 text-white px-6 py-4 rounded-2xl shadow-2xl">
+              <div className="text-center mb-4">
+                <div className="flex justify-center gap-2 mb-2">
+                  <Gift className="w-8 h-8" />
+                  <Hexagon className="w-8 h-8" />
+                  <Gift className="w-8 h-8" />
+                </div>
+                <p className="text-sm font-medium opacity-90">Polygon Filled!</p>
+                <p className="text-xl font-bold">{polygonWinners.length} Winners!</p>
+              </div>
+              <div className="bg-white/20 rounded-lg p-3 max-h-48 overflow-y-auto">
+                <ol className="space-y-1">
+                  {polygonWinners.map((winner, index) => (
+                    <li key={winner.id} className="flex items-center gap-2 text-sm">
+                      <span className="font-bold w-6">{index + 1}.</span>
+                      <span className="truncate">{winner.nickname}</span>
+                    </li>
+                  ))}
+                </ol>
               </div>
             </div>
           </div>

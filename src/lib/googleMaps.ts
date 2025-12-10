@@ -132,10 +132,12 @@ export function generateGiftPolygon(
   ];
 }
 
-export function getPolygonOpacity(guessCount: number): number {
-  if (guessCount >= 40) return 1.0;
-  if (guessCount >= 30) return 0.75;
-  if (guessCount >= 20) return 0.5;
-  if (guessCount >= 10) return 0.25;
+export function getPolygonOpacity(playersInside: number): number {
+  // Opacity scales from 0 to 100% as players inside approaches 10
+  if (playersInside >= 10) return 1.0;
+  if (playersInside >= 8) return 0.8;
+  if (playersInside >= 6) return 0.6;
+  if (playersInside >= 4) return 0.4;
+  if (playersInside >= 2) return 0.2;
   return 0;
 }

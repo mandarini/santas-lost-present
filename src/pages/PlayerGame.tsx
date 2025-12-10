@@ -335,14 +335,14 @@ export default function PlayerGame() {
       {round?.status === 'running' && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg px-6 py-3">
           {round.mode === 'polygon' ? (
-            // Polygon mode - no distance feedback, show guess count hint
+            // Polygon mode - no distance feedback, show progress hint
             <div className="text-center">
               <p className="text-sm font-medium text-gray-700">
                 {guesses.size > 0
-                  ? `${guesses.size} guesses made - ${getPolygonOpacity(guesses.size) * 100}% revealed`
+                  ? `${guesses.size} players guessing - find the hidden polygon!`
                   : 'Tap anywhere to place your guess'}
               </p>
-              <p className="text-xs text-gray-500 mt-1">Find the hidden gift polygon!</p>
+              <p className="text-xs text-gray-500 mt-1">Get 10 players inside to win!</p>
             </div>
           ) : lastDistance !== null ? (
             <div className="flex items-center gap-3">
