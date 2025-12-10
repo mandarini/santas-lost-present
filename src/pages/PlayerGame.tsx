@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useDeviceId } from '../hooks/useDeviceId';
 import { usePlayer } from '../hooks/usePlayer';
 import { useRound } from '../hooks/useRound';
 import { useGuesses } from '../hooks/useGuesses';
 import { supabase } from '../lib/supabase';
 import { loadGoogleMaps, LONDON_CENTER, LONDON_BOUNDS, getMarkerColor, getTemperatureLabel, getPolygonOpacity } from '../lib/googleMaps';
-import { Gift } from 'lucide-react';
+import { Gift, BookOpen } from 'lucide-react';
 
 export default function PlayerGame() {
   const navigate = useNavigate();
@@ -306,11 +306,21 @@ export default function PlayerGame() {
 
       <div className="absolute top-4 left-4 right-4 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-4">
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-600">Playing as</p>
-            <p className="text-lg font-bold" style={{ color: player.color }}>
-              {player.nickname}
-            </p>
+          <div className="flex items-center gap-3">
+            <div>
+              <p className="text-sm text-gray-600">Playing as</p>
+              <p className="text-lg font-bold" style={{ color: player.color }}>
+                {player.nickname}
+              </p>
+            </div>
+            <Link
+              to="/instructions"
+              className="flex items-center gap-1 text-gray-600 hover:text-red-600 transition-colors text-sm"
+              title="View Instructions"
+            >
+              <BookOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Help</span>
+            </Link>
           </div>
           <div className="text-right">
             {round?.status === 'idle' && (
