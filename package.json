@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.87.1",
+    "@supabase/supabase-js": "https://pkg.pr.new/@supabase/supabase-js@1961",
     "@types/three": "^0.181.0",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
